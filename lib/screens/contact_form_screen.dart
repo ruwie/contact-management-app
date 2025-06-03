@@ -2,6 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/contact.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class ContactFormScreen extends StatefulWidget {
   final Contact? contact;
@@ -19,8 +21,6 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
   String? _comment;
   File? _profilePic;
 
-  final ImagePicker _picker = ImagePicker();
-
   @override
   void initState() {
     super.initState();
@@ -33,11 +33,32 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
   }
 
   Future<void> _pickImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _profilePic = File(pickedFile.path);
-      });
+    final picker = ImagePicker();
+
+    if (Platform.isAndroid) {
+      final deviceInfo = DeviceInfoPlugin();
+      final androidInfo = await deviceInfo.androidInfo;
+      final sdkInt = androidInfo.version.sdkInt;
+
+      final permission = sdkInt >= 33
+          ? await Permission.photos.request()
+          : await Permission.storage.request();
+
+      if (!mounted) return;
+
+      if (permission.isGranted) {
+        final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+        if (pickedFile != null) {
+          setState(() {
+            _profilePic = File(pickedFile.path);
+          });
+        }
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Permission denied')));
+      }
     }
   }
 
@@ -45,10 +66,11 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       final newContact = Contact(
+        id: widget.contact?.id,
         name: _name!,
         number: _number!,
         comment: _comment,
-        profilePic: _profilePic, // << Include this
+        profilePic: _profilePic,
       );
       Navigator.of(context).pop(newContact);
     }
@@ -60,7 +82,7 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(isEditing ? 'Edit Contact' : 'Add Contact')),
       body: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
           child: ListView(
@@ -74,15 +96,19 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                         ? FileImage(_profilePic!)
                         : null,
                     child: _profilePic == null
-                        ? Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
+                        ? const Icon(
+                            Icons.add_a_photo,
+                            size: 40,
+                            color: Colors.grey,
+                          )
                         : null,
                   ),
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               TextFormField(
                 initialValue: _name,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Name *',
                   border: OutlineInputBorder(),
                 ),
@@ -91,10 +117,10 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                     : null,
                 onSaved: (val) => _name = val?.trim(),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               TextFormField(
                 initialValue: _number,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Number *',
                   border: OutlineInputBorder(),
                 ),
@@ -115,17 +141,17 @@ class _ContactFormScreenState extends State<ContactFormScreen> {
                 },
                 onSaved: (val) => _number = val?.trim(),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
               TextFormField(
                 initialValue: _comment,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   labelText: 'Comment (optional)',
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 3,
                 onSaved: (val) => _comment = val?.trim(),
               ),
-              SizedBox(height: 32),
+              const SizedBox(height: 32),
               ElevatedButton(
                 onPressed: _save,
                 child: Text(isEditing ? 'Save Changes' : 'Add Contact'),
